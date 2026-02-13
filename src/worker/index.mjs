@@ -79,7 +79,16 @@ async function handle(req) {
     const url = new URL(req.url);
     const path = url.pathname.replace(/\/+$|^\/+/, ''); // trim slashes
 
-    // obtain Google access token
+    // Lightweight debug route — do NOT require Google auth
+    if (path === '_debug' && req.method === 'GET') {
+      return jsonResponse({
+        spreadsheetId: SPREADSHEET_ID || null,
+        serviceEmail: SERVICE_EMAIL || null,
+        hasPrivateKey: !!PRIVATE_KEY && PRIVATE_KEY.length > 10,
+      });
+    }
+
+    // obtain Google access token (only for actual API routes)
     const gtoken = await getAccessTokenFromServiceAccount(PRIVATE_KEY, SERVICE_EMAIL);
     await ensureSheets(gtoken);
 
