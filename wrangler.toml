@@ -12,4 +12,5 @@ GOOGLE_SPREADSHEET_ID = "11rzIkhogRXuHzUHrvOi3J6xs4s_bO4QplcF5_nHrIMA"
 [env.production]
 name = "koperasi-web-prod"
 compatibility_flags = ["nodejs_compat"]
+vars = { GOOGLE_SPREADSHEET_ID = "11rzIkhogRXuHzUHrvOi3J6xs4s_bO4QplcF5_nHrIMA" }
 
