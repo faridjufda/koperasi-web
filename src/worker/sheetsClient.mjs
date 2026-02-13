@@ -213,6 +213,7 @@ export {
   getSpreadsheetMeta,
   addSheet,
   setHeaderRow,
+  formatProductsSheet,
   getValues,
   updateValues,
   appendValues,

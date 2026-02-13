@@ -1,3 +1,5 @@
+/* ===== KOPERASI WEB — Frontend Logic ===== */
+
 const state = {
   token: localStorage.getItem('koperasi_token') || '',
   username: localStorage.getItem('koperasi_username') || '',
@@ -6,48 +8,53 @@ const state = {
   transactions: [],
 };
 
-// Dynamic API URL untuk support localhost & production
+// Dynamic API URL: localhost → local proxy, production → Cloudflare Workers
 const API_BASE = (() => {
   if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
     return '/api';
   }
-  // Production: backend di Cloudflare Workers (update after deploy)
-  return 'https://koperasi-web-prod.workers.dev/api';
+  return 'https://koperasi-web-prod.kmbpendidikanekonomi.workers.dev/api';
 })();
 
-const loginView = document.getElementById('loginView');
-const appView = document.getElementById('appView');
-const loginForm = document.getElementById('loginForm');
-const loginError = document.getElementById('loginError');
-const adminBadge = document.getElementById('adminBadge');
+/* ===== DOM Elements ===== */
+const $ = (id) => document.getElementById(id);
 
-const kasirTab = document.getElementById('kasirTab');
-const barangTab = document.getElementById('barangTab');
-const txItemsBody = document.getElementById('txItemsBody');
-const txTotal = document.getElementById('txTotal');
+const loginView = $('loginView');
+const appView = $('appView');
+const loginForm = $('loginForm');
+const loginError = $('loginError');
+const adminBadge = $('adminBadge');
+const loadingOverlay = $('loadingOverlay');
 
-const productsBody = document.getElementById('productsBody');
-const movementsBody = document.getElementById('movementsBody');
-const txHistoryBody = document.getElementById('txHistoryBody');
-const adjustProductId = document.getElementById('adjustProductId');
+const kasirTab = $('kasirTab');
+const barangTab = $('barangTab');
+const txItemsBody = $('txItemsBody');
+const txTotal = $('txTotal');
 
-const successModal = document.getElementById('successModal');
-const errorModal = document.getElementById('errorModal');
-const successMsg = document.getElementById('successMsg');
-const errorMsg = document.getElementById('errorMsg');
-const successModalBtn = document.getElementById('successModalBtn');
-const errorModalBtn = document.getElementById('errorModalBtn');
+const productsBody = $('productsBody');
+const movementsBody = $('movementsBody');
+const txHistoryBody = $('txHistoryBody');
+const adjustProductId = $('adjustProductId');
+
+const successModal = $('successModal');
+const errorModal = $('errorModal');
+const successMsg = $('successMsg');
+const errorMsg = $('errorMsg');
+const successModalBtn = $('successModalBtn');
+const errorModalBtn = $('errorModalBtn');
+
+/* ===== Utilities ===== */
+function showLoading() { loadingOverlay && loadingOverlay.classList.remove('hidden'); }
+function hideLoading() { loadingOverlay && loadingOverlay.classList.add('hidden'); }
 
 function showSuccess(message) {
   successMsg.textContent = message;
   successModal.classList.remove('hidden');
 }
-
 function showError(message) {
   errorMsg.textContent = message;
   errorModal.classList.remove('hidden');
 }
-
 function hideModals() {
   successModal.classList.add('hidden');
   errorModal.classList.add('hidden');
@@ -55,13 +62,12 @@ function hideModals() {
 
 successModalBtn.addEventListener('click', hideModals);
 errorModalBtn.addEventListener('click', hideModals);
+successModal.addEventListener('click', (e) => { if (e.target === successModal) hideModals(); });
+errorModal.addEventListener('click', (e) => { if (e.target === errorModal) hideModals(); });
 
-successModal.addEventListener('click', (e) => {
-  if (e.target === successModal) hideModals();
-});
-
-errorModal.addEventListener('click', (e) => {
-  if (e.target === errorModal) hideModals();
+// Close modals with Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideModals();
 });
 
 function formatRupiah(value) {
@@ -72,43 +78,45 @@ function formatRupiah(value) {
   }).format(Number(value || 0));
 }
 
+function formatDate(iso) {
+  if (!iso) return '-';
+  try {
+    return new Date(iso).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+  } catch { return iso; }
+}
+
+/* ===== API Fetch ===== */
 async function apiFetch(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
 
-  if (state.token) {
-    headers.Authorization = `Bearer ${state.token}`;
-  }
-
-  const response = await fetch(path, {
-    ...options,
-    headers,
-  });
-
+  const response = await fetch(path, { ...options, headers });
   const isJson = String(response.headers.get('content-type') || '').includes('application/json');
   const body = isJson ? await response.json() : null;
 
   if (!response.ok) {
-    throw new Error(body?.message || 'Terjadi kesalahan pada server.');
+    throw new Error(body?.message || `Server error ${response.status}`);
   }
-
   return body;
 }
 
+/* ===== View Switching ===== */
 function showApp() {
   loginView.classList.add('hidden');
   appView.classList.remove('hidden');
-  adminBadge.textContent = `👤 Admin: ${state.username}`;
+  adminBadge.textContent = `👤 ${state.username}`;
 }
-
 function showLogin() {
   appView.classList.add('hidden');
   loginView.classList.remove('hidden');
+  loginError.textContent = '';
 }
 
 function setTab(tab) {
+  // Toggle panels
   if (tab === 'barang') {
     kasirTab.classList.add('hidden');
     barangTab.classList.remove('hidden');
@@ -116,102 +124,115 @@ function setTab(tab) {
     barangTab.classList.add('hidden');
     kasirTab.classList.remove('hidden');
   }
+  // Update tab button active state
+  document.querySelectorAll('.btn-tab[data-tab]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+
+/* ===== Toggle Password ===== */
+const togglePwBtn = $('togglePwBtn');
+if (togglePwBtn) {
+  togglePwBtn.addEventListener('click', () => {
+    const pw = $('password');
+    if (pw.type === 'password') {
+      pw.type = 'text';
+      togglePwBtn.textContent = '🙈';
+    } else {
+      pw.type = 'password';
+      togglePwBtn.textContent = '👁️';
+    }
+  });
+}
+
+/* ===== Product Helpers ===== */
+function updateStats() {
+  const total = state.products.length;
+  const low = state.products.filter((p) => p.stock > 0 && p.stock <= p.minStock).length;
+  const empty = state.products.filter((p) => p.stock === 0).length;
+  const st = $('statTotal'); if (st) st.textContent = total;
+  const sl = $('statLow'); if (sl) sl.textContent = low;
+  const se = $('statEmpty'); if (se) se.textContent = empty;
 }
 
 function makeProductOptions() {
-  const options = state.products
-    .map((product) => `<option value="${product.id}">${product.name} (${product.stock})</option>`)
+  adjustProductId.innerHTML = state.products
+    .map((p) => `<option value="${p.id}">${p.name} (stok: ${p.stock})</option>`)
     .join('');
-
-  adjustProductId.innerHTML = options;
 }
 
-function renderProducts() {
-  productsBody.innerHTML = state.products
-    .map((product) => {
-      let stockBadge = 'badge-success';
-      if (product.stock <= product.minStock && product.stock > 0) {
-        stockBadge = 'badge-warning';
-      }
-      if (product.stock === 0) {
-        stockBadge = 'badge-danger';
-      }
+function renderProducts(filter = '') {
+  const q = filter.toLowerCase();
+  const filtered = q
+    ? state.products.filter((p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q))
+    : state.products;
 
-      return `
-      <tr>
-        <td><strong>${product.id}</strong></td>
-        <td>${product.name}</td>
-        <td>${formatRupiah(product.sellPrice)}</td>
-        <td>${formatRupiah(product.buyPrice)}</td>
-        <td><span class="badge ${stockBadge}">${product.stock} unit</span></td>
-        <td>${product.minStock}</td>
-      </tr>
-    `;
+  productsBody.innerHTML = filtered
+    .map((p) => {
+      let stockBadge = 'badge-success';
+      if (p.stock <= p.minStock && p.stock > 0) stockBadge = 'badge-warning';
+      if (p.stock === 0) stockBadge = 'badge-danger';
+
+      return `<tr>
+        <td><code>${p.id}</code></td>
+        <td><strong>${p.name}</strong></td>
+        <td>${formatRupiah(p.sellPrice)}</td>
+        <td>${formatRupiah(p.buyPrice)}</td>
+        <td><span class="badge ${stockBadge}">${p.stock} unit</span></td>
+        <td>${p.minStock}</td>
+      </tr>`;
     })
     .join('');
 
   makeProductOptions();
+  updateStats();
 }
 
 function renderMovements() {
   movementsBody.innerHTML = state.movements
     .map((mv) => {
-      const typeIcon = mv.type === 'IN' ? '➕' : '➖';
       const typeBadge = mv.type === 'IN' ? 'badge-success' : 'badge-danger';
-      return `
-      <tr>
-        <td>${new Date(mv.createdAt).toLocaleString('id-ID', {
-          dateStyle: 'short',
-          timeStyle: 'short',
-        })}</td>
-        <td><strong>${mv.productName}</strong></td>
-        <td><span class="badge ${typeBadge}">${typeIcon} ${mv.type}</span></td>
+      const icon = mv.type === 'IN' ? '➕' : '➖';
+      return `<tr>
+        <td>${formatDate(mv.createdAt)}</td>
+        <td><strong>${mv.productName || '-'}</strong></td>
+        <td><span class="badge ${typeBadge}">${icon} ${mv.type}</span></td>
         <td>${mv.qty}</td>
         <td><strong>${mv.balanceAfter}</strong></td>
         <td>${mv.note || '-'}</td>
         <td>${mv.actor || '-'}</td>
-      </tr>
-    `;
+      </tr>`;
     })
     .join('');
 }
 
 function renderTxHistory() {
   txHistoryBody.innerHTML = state.transactions
-    .map(
-      (tx) => `
-      <tr>
-        <td><strong>${tx.id}</strong></td>
-        <td>${new Date(tx.createdAt).toLocaleString('id-ID', {
-          dateStyle: 'short',
-          timeStyle: 'short',
-        })}</td>
-        <td>${tx.cashier}</td>
+    .map((tx) => `<tr>
+        <td><code>${tx.id}</code></td>
+        <td>${formatDate(tx.createdAt)}</td>
+        <td>${tx.cashier || '-'}</td>
         <td>${tx.memberName || '-'}</td>
-        <td><span class="badge badge-primary">${tx.paymentMethod}</span></td>
+        <td><span class="badge badge-primary">${tx.paymentMethod || '-'}</span></td>
         <td><strong>${formatRupiah(tx.total)}</strong></td>
-      </tr>
-    `
-    )
+      </tr>`)
     .join('');
 }
 
+/* ===== Transaction Item Rows ===== */
 function recalcTransactionTotal() {
   const rows = Array.from(txItemsBody.querySelectorAll('tr'));
   let total = 0;
-
   rows.forEach((row) => {
     const productId = row.querySelector('.tx-product').value;
     const qty = Number(row.querySelector('.tx-qty').value || 0);
     const product = state.products.find((item) => item.id === productId);
     const price = Number(product?.sellPrice || 0);
     const subtotal = qty * price;
-
     row.querySelector('.tx-price').textContent = formatRupiah(price);
     row.querySelector('.tx-subtotal').textContent = formatRupiah(subtotal);
     total += subtotal;
   });
-
   txTotal.textContent = formatRupiah(total);
 }
 
@@ -220,62 +241,71 @@ function addTransactionItemRow() {
     showError('Belum ada barang. Tambahkan barang dulu di tab Pembukuan Barang.');
     return;
   }
-
   const row = document.createElement('tr');
   row.innerHTML = `
     <td>
       <select class="tx-product">
-        ${state.products.map((product) => `<option value="${product.id}">${product.name}</option>`).join('')}
+        ${state.products.map((p) => `<option value="${p.id}">${p.name} (${p.stock})</option>`).join('')}
       </select>
     </td>
-    <td><input class="tx-qty" type="number" min="1" value="1" /></td>
+    <td><input class="tx-qty" type="number" min="1" value="1" style="width:70px" /></td>
     <td class="tx-price">${formatRupiah(0)}</td>
     <td class="tx-subtotal">${formatRupiah(0)}</td>
-    <td><button type="button" class="danger tx-remove">Hapus</button></td>
+    <td><button type="button" class="btn-danger btn-sm tx-remove">✕</button></td>
   `;
-
   row.querySelector('.tx-product').addEventListener('change', recalcTransactionTotal);
   row.querySelector('.tx-qty').addEventListener('input', recalcTransactionTotal);
-  row.querySelector('.tx-remove').addEventListener('click', () => {
-    row.remove();
-    recalcTransactionTotal();
-  });
-
+  row.querySelector('.tx-remove').addEventListener('click', () => { row.remove(); recalcTransactionTotal(); });
   txItemsBody.appendChild(row);
   recalcTransactionTotal();
 }
 
+/* ===== Load All Data ===== */
 async function loadData() {
-  const [products, movements, transactions] = await Promise.all([
-    apiFetch(API_BASE + '/products'),
-    apiFetch(API_BASE + '/movements'),
-    apiFetch(API_BASE + '/transactions'),
-  ]);
+  showLoading();
+  try {
+    const [products, movements, transactions] = await Promise.all([
+      apiFetch(API_BASE + '/products'),
+      apiFetch(API_BASE + '/movements'),
+      apiFetch(API_BASE + '/transactions'),
+    ]);
+    state.products = products || [];
+    state.movements = movements || [];
+    state.transactions = transactions || [];
 
-  state.products = products;
-  state.movements = movements;
-  state.transactions = transactions;
-
-  renderProducts();
-  renderMovements();
-  renderTxHistory();
-  recalcTransactionTotal();
+    renderProducts();
+    renderMovements();
+    renderTxHistory();
+    recalcTransactionTotal();
+  } finally {
+    hideLoading();
+  }
 }
 
+/* ===== Search Products ===== */
+const productSearch = $('productSearch');
+if (productSearch) {
+  productSearch.addEventListener('input', () => {
+    renderProducts(productSearch.value);
+  });
+}
+
+/* ===== Event Handlers ===== */
+
+// LOGIN
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   loginError.textContent = '';
 
-  const username = document.getElementById('username').value.trim();
-  const password = document.getElementById('password').value;
-  const loginBtn = document.getElementById('loginBtn');
-
-  const originalText = loginBtn.textContent;
-  loginBtn.textContent = '⏳ Memverifikasi...';
+  const username = $('username').value.trim();
+  const password = $('password').value;
+  const loginBtn = $('loginBtn');
+  const originalHTML = loginBtn.innerHTML;
+  loginBtn.innerHTML = '<span>⏳ Memverifikasi…</span>';
   loginBtn.disabled = true;
 
   try {
-    const result = await apiFetch('/api/login', {
+    const result = await apiFetch(API_BASE + '/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
@@ -288,19 +318,17 @@ loginForm.addEventListener('submit', async (event) => {
     showApp();
     setTab('kasir');
     await loadData();
-
-    if (!txItemsBody.children.length) {
-      addTransactionItemRow();
-    }
+    if (!txItemsBody.children.length) addTransactionItemRow();
   } catch (error) {
     loginError.textContent = error.message;
   } finally {
-    loginBtn.textContent = originalText;
+    loginBtn.innerHTML = originalHTML;
     loginBtn.disabled = false;
   }
 });
 
-document.getElementById('logoutBtn').addEventListener('click', () => {
+// LOGOUT
+$('logoutBtn').addEventListener('click', () => {
   state.token = '';
   state.username = '';
   localStorage.removeItem('koperasi_token');
@@ -308,47 +336,43 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
   showLogin();
 });
 
-document.querySelectorAll('[data-tab]').forEach((button) => {
-  button.addEventListener('click', () => setTab(button.dataset.tab));
+// TAB BUTTONS
+document.querySelectorAll('[data-tab]').forEach((btn) => {
+  btn.addEventListener('click', () => setTab(btn.dataset.tab));
 });
 
-document.getElementById('refreshBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('refreshBtn');
-  const originalText = btn.textContent;
-  btn.textContent = '⏳ Memuat...';
+// REFRESH
+$('refreshBtn').addEventListener('click', async () => {
+  const btn = $('refreshBtn');
   btn.disabled = true;
-
   try {
     await loadData();
     showSuccess('Data berhasil diperbarui.');
   } catch (error) {
     showError(error.message);
   } finally {
-    btn.textContent = originalText;
     btn.disabled = false;
   }
 });
 
-document.getElementById('addTxItemBtn').addEventListener('click', addTransactionItemRow);
+// ADD TX ITEM
+$('addTxItemBtn').addEventListener('click', addTransactionItemRow);
 
-document.getElementById('saveTxBtn').addEventListener('click', async () => {
+// SAVE TRANSACTION
+$('saveTxBtn').addEventListener('click', async () => {
   const rows = Array.from(txItemsBody.querySelectorAll('tr'));
-  if (!rows.length) {
-    showError('Tambahkan item transaksi terlebih dahulu.');
-    return;
-  }
+  if (!rows.length) { showError('Tambahkan item transaksi terlebih dahulu.'); return; }
 
   const items = rows.map((row) => ({
     productId: row.querySelector('.tx-product').value,
     qty: Number(row.querySelector('.tx-qty').value || 0),
   }));
+  const memberName = $('memberName').value.trim();
+  const paymentMethod = $('paymentMethod').value;
 
-  const memberName = document.getElementById('memberName').value.trim();
-  const paymentMethod = document.getElementById('paymentMethod').value;
-
-  const btn = document.getElementById('saveTxBtn');
-  const originalText = btn.textContent;
-  btn.textContent = '⏳ Menyimpan...';
+  const btn = $('saveTxBtn');
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Menyimpan…';
   btn.disabled = true;
 
   try {
@@ -356,35 +380,34 @@ document.getElementById('saveTxBtn').addEventListener('click', async () => {
       method: 'POST',
       body: JSON.stringify({ memberName, paymentMethod, items }),
     });
-
     txItemsBody.innerHTML = '';
-    addTransactionItemRow();
-    document.getElementById('memberName').value = '';
+    $('memberName').value = '';
     await loadData();
+    addTransactionItemRow();
     showSuccess('Transaksi berhasil disimpan!');
   } catch (error) {
     showError(error.message);
   } finally {
-    btn.textContent = originalText;
+    btn.textContent = orig;
     btn.disabled = false;
   }
 });
 
-document.getElementById('productForm').addEventListener('submit', async (event) => {
+// SAVE PRODUCT
+$('productForm').addEventListener('submit', async (event) => {
   event.preventDefault();
-
   const payload = {
-    id: document.getElementById('productId').value.trim() || undefined,
-    name: document.getElementById('productName').value.trim(),
-    sellPrice: Number(document.getElementById('sellPrice').value || 0),
-    buyPrice: Number(document.getElementById('buyPrice').value || 0),
-    stock: Number(document.getElementById('stock').value || 0),
-    minStock: Number(document.getElementById('minStock').value || 0),
+    id: $('productId').value.trim() || undefined,
+    name: $('productName').value.trim(),
+    sellPrice: Number($('sellPrice').value || 0),
+    buyPrice: Number($('buyPrice').value || 0),
+    stock: Number($('stock').value || 0),
+    minStock: Number($('minStock').value || 0),
   };
 
   const btn = event.target.querySelector('button[type="submit"]');
-  const originalText = btn.textContent;
-  btn.textContent = '⏳ Menyimpan...';
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Menyimpan…';
   btn.disabled = true;
 
   try {
@@ -392,31 +415,30 @@ document.getElementById('productForm').addEventListener('submit', async (event) 
       method: 'POST',
       body: JSON.stringify(payload),
     });
-
     event.target.reset();
     await loadData();
     showSuccess('Barang berhasil disimpan!');
   } catch (error) {
     showError(error.message);
   } finally {
-    btn.textContent = originalText;
+    btn.textContent = orig;
     btn.disabled = false;
   }
 });
 
-document.getElementById('adjustmentForm').addEventListener('submit', async (event) => {
+// SAVE STOCK ADJUSTMENT
+$('adjustmentForm').addEventListener('submit', async (event) => {
   event.preventDefault();
-
   const payload = {
-    productId: document.getElementById('adjustProductId').value,
-    type: document.getElementById('adjustType').value,
-    qty: Number(document.getElementById('adjustQty').value || 0),
-    note: document.getElementById('adjustNote').value.trim(),
+    productId: $('adjustProductId').value,
+    type: $('adjustType').value,
+    qty: Number($('adjustQty').value || 0),
+    note: $('adjustNote').value.trim(),
   };
 
   const btn = event.target.querySelector('button[type="submit"]');
-  const originalText = btn.textContent;
-  btn.textContent = '⏳ Menyimpan...';
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Menyimpan…';
   btn.disabled = true;
 
   try {
@@ -424,33 +446,28 @@ document.getElementById('adjustmentForm').addEventListener('submit', async (even
       method: 'POST',
       body: JSON.stringify(payload),
     });
-
     event.target.reset();
     await loadData();
     showSuccess('Penyesuaian stok berhasil disimpan!');
   } catch (error) {
     showError(error.message);
   } finally {
-    btn.textContent = originalText;
+    btn.textContent = orig;
     btn.disabled = false;
   }
 });
 
+/* ===== Bootstrap ===== */
 (async function bootstrap() {
-  if (!state.token) {
-    showLogin();
-    return;
-  }
+  if (!state.token) { showLogin(); return; }
 
   try {
     showApp();
     setTab('kasir');
     await loadData();
-
-    if (!txItemsBody.children.length) {
-      addTransactionItemRow();
-    }
-  } catch (error) {
+    if (!txItemsBody.children.length) addTransactionItemRow();
+  } catch (_error) {
+    // Token expired or invalid — go back to login
     state.token = '';
     state.username = '';
     localStorage.removeItem('koperasi_token');

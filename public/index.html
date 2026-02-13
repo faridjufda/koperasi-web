@@ -3,226 +3,279 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Koperasi Web</title>
+    <title>Koperasi Web — Kasir &amp; Pembukuan</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+      <div class="spinner"></div>
+      <p>Memuat data…</p>
+    </div>
+
     <div class="container">
+      <!-- HEADER -->
       <header class="header">
-        <h1>📦 Koperasi Web</h1>
-        <p>Kasir & pembukuan barang berbasis Google Spreadsheet</p>
+        <div class="logo">
+          <span class="logo-icon">🏪</span>
+          <div>
+            <h1>Koperasi Web</h1>
+            <p>Kasir &amp; pembukuan barang berbasis Google Spreadsheet</p>
+          </div>
+        </div>
       </header>
 
+      <!-- ====== LOGIN ====== -->
       <section id="loginView" class="card login-card">
-        <h2>🔐 Login Admin</h2>
-        <form id="loginForm">
+        <div class="login-icon">🔐</div>
+        <h2>Login Admin</h2>
+        <form id="loginForm" autocomplete="on">
           <label>
-            👤 Username
-            <input id="username" type="text" placeholder="Masukkan username" required />
+            <span class="label-text">👤 Username</span>
+            <input id="username" type="text" placeholder="Masukkan username" autocomplete="username" required />
           </label>
           <label>
-            🔑 Password
-            <input id="password" type="password" placeholder="Masukkan password" required />
+            <span class="label-text">🔑 Password</span>
+            <div class="password-wrap">
+              <input id="password" type="password" placeholder="Masukkan password" autocomplete="current-password" required />
+              <button type="button" id="togglePwBtn" class="icon-btn" title="Tampilkan password">👁️</button>
+            </div>
           </label>
-          <button type="submit" id="loginBtn">Masuk</button>
+          <button type="submit" id="loginBtn" class="btn-primary btn-full">
+            <span>Masuk</span>
+          </button>
         </form>
         <p id="loginError" class="error"></p>
       </section>
 
+      <!-- ====== APP ====== -->
       <section id="appView" class="hidden">
-        <div class="toolbar card">
-          <div>
-            <span id="adminBadge">👤 Admin</span>
+        <!-- Toolbar -->
+        <nav class="toolbar card">
+          <div class="toolbar-left">
+            <span id="adminBadge" class="admin-badge">👤 Admin</span>
           </div>
-          <div class="actions">
-            <button class="secondary" data-tab="kasir">💳 Kasir</button>
-            <button class="secondary" data-tab="barang">📊 Pembukuan</button>
-            <button id="refreshBtn" class="secondary">🔄 Refresh</button>
-            <button id="logoutBtn" class="danger">🚪 Logout</button>
+          <div class="toolbar-right">
+            <button class="btn-tab active" data-tab="kasir">💳 Kasir</button>
+            <button class="btn-tab" data-tab="barang">📊 Pembukuan</button>
+            <button id="refreshBtn" class="btn-icon" title="Refresh data">🔄</button>
+            <button id="logoutBtn" class="btn-danger" title="Logout">🚪 Keluar</button>
           </div>
-        </div>
+        </nav>
 
+        <!-- ====== TAB: KASIR ====== -->
         <section id="kasirTab" class="tab-panel card">
-          <h2>💳 Kasir</h2>
-          <form id="txMetaForm" class="grid-2">
+          <h2>💳 Kasir — Buat Transaksi</h2>
+
+          <div class="grid-2">
             <label>
-              👤 Nama Anggota (opsional)
+              <span class="label-text">👤 Nama Anggota (opsional)</span>
               <input id="memberName" type="text" placeholder="Nama pemesan" />
             </label>
             <label>
-              💰 Metode Bayar
+              <span class="label-text">💰 Metode Bayar</span>
               <select id="paymentMethod">
                 <option value="cash">💵 Cash</option>
                 <option value="transfer">🏦 Transfer</option>
                 <option value="qris">📱 QRIS</option>
               </select>
             </label>
-          </form>
+          </div>
 
-          <div class="row-between">
+          <div class="section-header">
             <h3>🛒 Item Transaksi</h3>
-            <button id="addTxItemBtn" type="button" class="secondary">+ Tambah Item</button>
+            <button id="addTxItemBtn" type="button" class="btn-secondary btn-sm">+ Tambah Item</button>
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>Barang</th>
-                <th>Qty</th>
-                <th>Harga</th>
-                <th>Subtotal</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody id="txItemsBody"></tbody>
-          </table>
-
-          <div class="row-between total-wrap">
-            <strong>📊 Total</strong>
-            <strong id="txTotal">Rp 0</strong>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Barang</th>
+                  <th>Qty</th>
+                  <th>Harga</th>
+                  <th>Subtotal</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="txItemsBody"></tbody>
+            </table>
           </div>
 
-          <button id="saveTxBtn" type="button">✅ Simpan Transaksi</button>
+          <div class="total-bar">
+            <strong>Total</strong>
+            <strong id="txTotal" class="total-amount">Rp 0</strong>
+          </div>
 
-          <h3>📝 Riwayat Transaksi</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Waktu</th>
-                <th>Kasir</th>
-                <th>Anggota</th>
-                <th>Metode</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody id="txHistoryBody"></tbody>
-          </table>
+          <button id="saveTxBtn" type="button" class="btn-success btn-full">✅ Simpan Transaksi</button>
+
+          <div class="section-header" style="margin-top:32px;">
+            <h3>📝 Riwayat Transaksi</h3>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Waktu</th>
+                  <th>Kasir</th>
+                  <th>Anggota</th>
+                  <th>Metode</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="txHistoryBody"></tbody>
+            </table>
+          </div>
         </section>
 
+        <!-- ====== TAB: PEMBUKUAN ====== -->
         <section id="barangTab" class="tab-panel card hidden">
           <h2>📊 Pembukuan Barang</h2>
+
+          <!-- Statistik Ringkas -->
+          <div class="stats-row" id="statsRow">
+            <div class="stat-card">
+              <span class="stat-value" id="statTotal">0</span>
+              <span class="stat-label">Total Produk</span>
+            </div>
+            <div class="stat-card stat-warning">
+              <span class="stat-value" id="statLow">0</span>
+              <span class="stat-label">Stok Rendah</span>
+            </div>
+            <div class="stat-card stat-danger">
+              <span class="stat-value" id="statEmpty">0</span>
+              <span class="stat-label">Stok Habis</span>
+            </div>
+          </div>
 
           <h3>📦 Input / Update Barang</h3>
           <form id="productForm" class="grid-3">
             <label>
-              🏷️ Kode Barang (ID)
+              <span class="label-text">🏷️ Kode Barang (ID)</span>
               <input id="productId" type="text" placeholder="Kosongkan untuk auto" />
             </label>
             <label>
-              📝 Nama Barang
+              <span class="label-text">📝 Nama Barang</span>
               <input id="productName" type="text" placeholder="Nama item" required />
             </label>
             <label>
-              💵 Harga Jual
-              <input id="sellPrice" type="number" min=\"0\" step=\"1\" placeholder=\"0\" required />
+              <span class="label-text">💵 Harga Jual</span>
+              <input id="sellPrice" type="number" min="0" step="1" placeholder="0" required />
             </label>
             <label>
-              💰 Harga Beli
-              <input id=\"buyPrice\" type=\"number\" min=\"0\" step=\"1\" placeholder=\"0\" required />
+              <span class="label-text">💰 Harga Beli</span>
+              <input id="buyPrice" type="number" min="0" step="1" placeholder="0" required />
             </label>
             <label>
-              📦 Stok
-              <input id=\"stock\" type=\"number\" min=\"0\" step=\"1\" placeholder=\"0\" required />
+              <span class="label-text">📦 Stok</span>
+              <input id="stock" type="number" min="0" step="1" placeholder="0" required />
             </label>
             <label>
-              ⚠️ Minimum Stok
-              <input id=\"minStock\" type=\"number\" min=\"0\" step=\"1\" placeholder=\"0\" required />
+              <span class="label-text">⚠️ Minimum Stok</span>
+              <input id="minStock" type="number" min="0" step="1" placeholder="0" required />
             </label>
-            <div class=\"span-3\">
-              <button type=\"submit\">✅ Simpan Barang</button>
+            <div class="span-full">
+              <button type="submit" class="btn-primary">✅ Simpan Barang</button>
             </div>
           </form>
 
           <h3>🔄 Penyesuaian Stok</h3>
-          <form id=\"adjustmentForm\" class=\"grid-4\">
+          <form id="adjustmentForm" class="grid-4">
             <label>
-              📦 Barang
-              <select id=\"adjustProductId\" required></select>
+              <span class="label-text">📦 Barang</span>
+              <select id="adjustProductId" required></select>
             </label>
             <label>
-              🔄 Tipe
-              <select id=\"adjustType\" required>
-                <option value=\"IN\">➕ IN (Tambah)</option>
-                <option value=\"OUT\">➖ OUT (Kurang)</option>
+              <span class="label-text">🔄 Tipe</span>
+              <select id="adjustType" required>
+                <option value="IN">➕ IN (Tambah)</option>
+                <option value="OUT">➖ OUT (Kurang)</option>
               </select>
             </label>
             <label>
-              🔢 Jumlah
-              <input id=\"adjustQty\" type=\"number\" min=\"1\" step=\"1\" placeholder=\"0\" required />
+              <span class="label-text">🔢 Jumlah</span>
+              <input id="adjustQty" type="number" min="1" step="1" placeholder="0" required />
             </label>
             <label>
-              📝 Catatan
-              <input id=\"adjustNote\" type=\"text\" placeholder=\"mis. rusak, retur, restok\" />
+              <span class="label-text">📝 Catatan</span>
+              <input id="adjustNote" type="text" placeholder="mis. rusak, retur, restok" />
             </label>
-            <div class=\"span-4\">
-              <button type=\"submit\">✅ Simpan Penyesuaian</button>
+            <div class="span-full">
+              <button type="submit" class="btn-primary">✅ Simpan Penyesuaian</button>
             </div>
           </form>
 
-          <h3>📋 Daftar Barang</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Nama</th>
-                <th>Harga Jual</th>
-                <th>Harga Beli</th>
-                <th>Stok</th>
-                <th>Min Stok</th>
-              </tr>
-            </thead>
-            <tbody id="productsBody"></tbody>
-          </table>
+          <div class="section-header">
+            <h3>📋 Daftar Barang</h3>
+            <input id="productSearch" type="search" placeholder="🔍 Cari barang…" class="search-input" />
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nama</th>
+                  <th>Harga Jual</th>
+                  <th>Harga Beli</th>
+                  <th>Stok</th>
+                  <th>Min Stok</th>
+                </tr>
+              </thead>
+              <tbody id="productsBody"></tbody>
+            </table>
+          </div>
 
-          <h3>📊 Riwayat Pergerakan Stok</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Waktu</th>
-                <th>Barang</th>
-                <th>Tipe</th>
-                <th>Qty</th>
-                <th>Saldo</th>
-                <th>Catatan</th>
-                <th>Petugas</th>
-              </tr>
-            </thead>
-            <tbody id="movementsBody"></tbody>
-          </table>
+          <div class="section-header">
+            <h3>📊 Riwayat Pergerakan Stok</h3>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Waktu</th>
+                  <th>Barang</th>
+                  <th>Tipe</th>
+                  <th>Qty</th>
+                  <th>Saldo</th>
+                  <th>Catatan</th>
+                  <th>Petugas</th>
+                </tr>
+              </thead>
+              <tbody id="movementsBody"></tbody>
+            </table>
+          </div>
         </section>
       </section>
     </div>
 
-    <!-- Success Modal -->
-    <div id="successModal" class="modal-backdrop hidden">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>✅ Sukses</h3>
-        </div>
-        <div class="modal-body">
-          <p id="successMsg"></p>
-        </div>
-        <div class="modal-footer">
-          <button id="successModalBtn" type="button">OK</button>
-        </div>
+    <!-- ====== MODALS ====== -->
+    <div id="successModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+      <div class="modal modal-success">
+        <div class="modal-icon">✅</div>
+        <h3>Sukses</h3>
+        <p id="successMsg"></p>
+        <button id="successModalBtn" type="button" class="btn-primary btn-full">OK</button>
       </div>
     </div>
 
-    <!-- Error Modal -->
-    <div id="errorModal" class="modal-backdrop hidden">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>❌ Error</h3>
-        </div>
-        <div class="modal-body">
-          <p id="errorMsg"></p>
-        </div>
-        <div class="modal-footer">
-          <button id="errorModalBtn" type="button">OK</button>
-        </div>
+    <div id="errorModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+      <div class="modal modal-error">
+        <div class="modal-icon">❌</div>
+        <h3>Error</h3>
+        <p id="errorMsg"></p>
+        <button id="errorModalBtn" type="button" class="btn-danger btn-full">OK</button>
       </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>&copy; 2026 Koperasi Web &bull; Dibuat dengan ❤️</p>
+    </footer>
 
     <script src="/app.js"></script>
   </body>
