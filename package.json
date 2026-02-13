@@ -1,0 +1,26 @@
+{
+  "name": "koperasi-web",
+  "version": "1.0.0",
+  "description": "Web koperasi dengan fitur kasir, pembukuan barang, dan login admin berbasis Google Spreadsheet",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "create-admin": "node scripts/create-admin.js"
+  },
+  "keywords": [
+    "koperasi",
+    "kasir",
+    "google-sheets"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "google-auth-library": "^9.15.1",
+    "google-spreadsheet": "^4.1.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

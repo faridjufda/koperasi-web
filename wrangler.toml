@@ -1,0 +1,6 @@
+name = "koperasi-web"
+type = "javascript"
+workers_dev = false
+
+[env.production]
+name = "koperasi-web-prod"
