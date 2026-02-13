@@ -88,6 +88,14 @@ async function handle(req) {
       return jsonResponse({ ok: true, message: 'Worker dan koneksi spreadsheet siap.' });
     }
 
+    if (path === '_debug' && req.method === 'GET') {
+      return jsonResponse({
+        spreadsheetId: SPREADSHEET_ID || null,
+        serviceEmail: SERVICE_EMAIL || null,
+        hasPrivateKey: !!PRIVATE_KEY && PRIVATE_KEY.length > 10,
+      });
+    }
+
     if (path === 'api/login' && req.method === 'POST') {
       const body = await req.json();
       const { username, password } = body || {};
