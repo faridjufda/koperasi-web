@@ -5,6 +5,9 @@ function onOpen() {
     .addItem('Buka Quick Add', 'showQuickAddSidebar')
     .addItem('Buat Dashboard', 'createDashboard')
     .addItem('Kirim Peringatan Stok Rendah', 'sendLowStockFromNotifications')
+    .addItem('Aktifkan Trigger Harian', 'createTimeDrivenTrigger')
+    .addItem('Nonaktifkan Trigger Harian', 'deleteTimeDrivenTriggers')
+    .addItem('Export Laporan (PDF)', 'exportDashboardAsPDF')
     .addToUi();
 }
 
@@ -66,9 +69,45 @@ function sendLowStockFromNotifications(){
 
 function createTimeDrivenTrigger(){
   // run every day at 08:00
+  // creates a trigger that will run sendLowStockFromNotifications each day
   ScriptApp.newTrigger('sendLowStockFromNotifications')
     .timeBased()
     .everyDays(1)
     .atHour(8)
     .create();
+  SpreadsheetApp.getUi().alert('Trigger harian dibuat: akan mengirim peringatan setiap hari pukul 08:00.');
+}
+
+function deleteTimeDrivenTriggers(){
+  const all = ScriptApp.getProjectTriggers();
+  let removed = 0;
+  all.forEach(t=>{
+    if (t.getHandlerFunction() === 'sendLowStockFromNotifications') { ScriptApp.deleteTrigger(t); removed++; }
+  });
+  SpreadsheetApp.getUi().alert('Trigger dihapus: ' + removed + ' trigger dihapus.');
+}
+
+function exportDashboardAsPDF(){
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getSheetByName('Dashboard');
+  if (!sheet) return SpreadsheetApp.getUi().alert('Dashboard belum dibuat. Klik "Buat Dashboard" terlebih dahulu.');
+
+  const url = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=pdf' +
+    '&size=A4&portrait=true&fitw=true&sheetnames=false&printtitle=false&pagenumbers=false' +
+    '&gridlines=false&fzr=false&gid=' + sheet.getSheetId();
+
+  const token = ScriptApp.getOAuthToken();
+  const resp = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  const blob = resp.getBlob().setName('Koperasi-Dashboard-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd') + '.pdf');
+
+  // save to Drive folder "Koperasi Reports" (create if missing)
+  const folders = DriveApp.getFoldersByName('Koperasi Reports');
+  const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Koperasi Reports');
+  const file = folder.createFile(blob);
+
+  // also email the owner a copy
+  const owner = Session.getActiveUser().getEmail();
+  MailApp.sendEmail(owner, 'Laporan Dashboard Koperasi (PDF)', 'Laporan dashboard disimpan di Google Drive dan terlampir.', { attachments: [blob] });
+
+  SpreadsheetApp.getUi().alert('Laporan Dashboard (PDF) dibuat dan dikirim ke email Anda. File disimpan di Drive > Koperasi Reports.');
 }

@@ -66,6 +66,21 @@ function jsonResponse(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+// Lightweight error reporter — forwards errors to a logging endpoint when configured
+async function reportError(err) {
+  try {
+    const payload = { message: err && err.message ? err.message : String(err), stack: err && err.stack ? err.stack : null, ts: new Date().toISOString(), worker: 'koperasi-web' };
+    if (process.env.LOGFLARE_URL) {
+      // fire-and-forget
+      fetch(process.env.LOGFLARE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(()=>{});
+    }
+    // keep console logging for Cloudflare's native logs
+    console.error(payload);
+  } catch (e) {
+    // ignore
+  }
+}
+
 async function verifyJwtFromHeader(req) {
   const hdr = req.headers.get('authorization') || '';
   const token = hdr.startsWith('Bearer ') ? hdr.slice(7) : null;
@@ -274,6 +289,8 @@ async function handle(req) {
     // Fallback: serve static files from Workers not implemented — return 404
     return new Response('Not found', { status: 404 });
   } catch (err) {
+    // report to external logger if configured (non-blocking)
+    reportError(err);
     return jsonResponse({ message: err.message || String(err) }, 500);
   }
 }
