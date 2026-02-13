@@ -269,9 +269,16 @@ async function handle(request, workerEnv) {
       );
       if (!adminRow) return jsonResponse({ message: 'Username atau password salah.' }, 401);
 
+      // Support both plain password and password hash
       const passwordHash = adminRow.passwordHash || '';
-      // Plain match for Workers migration; use bcrypt on Express server to create proper hash
-      if (password !== passwordHash && passwordHash !== '') {
+      const plainPassword = adminRow.password || '';
+      
+      // Check plain password first, then hash
+      const isValidPassword = 
+        password === plainPassword || 
+        (passwordHash && password === passwordHash);
+      
+      if (!isValidPassword) {
         return jsonResponse({ message: 'Username atau password salah.' }, 401);
       }
 
