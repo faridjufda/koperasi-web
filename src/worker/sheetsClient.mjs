@@ -1,9 +1,46 @@
-import { SignJWT, importPKCS8 } from 'jose';
-
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 let cachedToken = null; // { token, exp }
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
+function base64UrlEncode(uint8Array) {
+  // uint8Array -> binary string -> base64
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    const chunk = uint8Array.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  const b64 = btoa(binary);
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+function stringToUint8Array(str) {
+  return new TextEncoder().encode(str);
+}
+function base64UrlEncodeString(str) {
+  return base64UrlEncode(stringToUint8Array(str));
+}
+
+async function importPrivateKeyFromPem(pem) {
+  const b64 = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n|\r/g, '');
+  const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return crypto.subtle.importKey(
+    'pkcs8',
+    raw.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+}
+
+async function signWithPrivateKey(privateKeyPem, unsigned) {
+  const key = await importPrivateKeyFromPem(privateKeyPem);
+  const signature = await crypto.subtle.sign(
+    { name: 'RSASSA-PKCS1-v1_5' },
+    key,
+    stringToUint8Array(unsigned)
+  );
+  return base64UrlEncode(new Uint8Array(signature));
+}
 
 async function getAccessTokenFromServiceAccount(privateKeyPem, clientEmail) {
   if (cachedToken && cachedToken.exp > nowSec() + 30) return cachedToken.token;
@@ -11,7 +48,8 @@ async function getAccessTokenFromServiceAccount(privateKeyPem, clientEmail) {
   const iat = nowSec();
   const exp = iat + 3600;
 
-  const jwtPayload = {
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const payload = {
     iss: clientEmail,
     scope: SCOPES.join(' '),
     aud: 'https://oauth2.googleapis.com/token',
@@ -19,17 +57,16 @@ async function getAccessTokenFromServiceAccount(privateKeyPem, clientEmail) {
     exp,
   };
 
-  const key = await importPKCS8(privateKeyPem, 'RS256');
-  const signed = await new SignJWT(jwtPayload)
-    .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
-    .sign(key);
+  const unsigned = `${base64UrlEncodeString(JSON.stringify(header))}.${base64UrlEncodeString(JSON.stringify(payload))}`;
+  const signature = await signWithPrivateKey(privateKeyPem, unsigned);
+  const jwt = `${unsigned}.${signature}`;
 
   const resp = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: signed,
+      assertion: jwt,
     }),
   });
 

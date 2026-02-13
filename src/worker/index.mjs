@@ -74,10 +74,6 @@ async function verifyJwtFromHeader(req) {
   }
 }
 
-addEventListener('fetch', (event) => {
-  event.respondWith(handle(event.request));
-});
-
 async function handle(req) {
   try {
     const url = new URL(req.url);
@@ -101,17 +97,19 @@ async function handle(req) {
       const adminRow = admins.find((r) => String((r.username || '')).trim() === String(username).trim() && String((r.isActive || '')).toLowerCase() !== 'false');
       if (!adminRow) return jsonResponse({ message: 'Username atau password salah.' }, 401);
 
-      // bcrypt is not available in Workers — verify by comparing plain password to stored hash is not possible.
-      // For migration, accept exact match of pre-hashed password value (admin should be created via create-admin on server side),
-      // or fallback: if password === stored passwordHash (development only).
       const passwordHash = adminRow.passwordHash || '';
+      // For Workers we accept plain-match during migration (admin should be created via server create-admin)
       if (password === passwordHash || passwordHash === '' ) {
-        // sign token (HS256)
-        const token = await new SignJWT({ username: adminRow.username, role: 'admin' })
-          .setProtectedHeader({ alg: 'HS256' })
-          .setIssuedAt()
-          .setExpirationTime('8h')
-          .sign(new TextEncoder().encode(JWT_SECRET));
+        // sign token (HS256) using Web Crypto
+        const header = { alg: 'HS256', typ: 'JWT' };
+        const iat = Math.floor(Date.now()/1000);
+        const exp = iat + 60 * 60 * 8;
+        const payload = { username: adminRow.username, role: 'admin', iat, exp };
+        const tokenUnsigned = `${base64UrlEncodeString(JSON.stringify(header))}.${base64UrlEncodeString(JSON.stringify(payload))}`;
+        const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(JWT_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+        const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(tokenUnsigned));
+        const signature = base64UrlEncode(new Uint8Array(sig));
+        const token = `${tokenUnsigned}.${signature}`;
         return jsonResponse({ token, username: adminRow.username });
       }
 
@@ -234,3 +232,5 @@ async function handle(req) {
     return jsonResponse({ message: err.message || String(err) }, 500);
   }
 }
+
+export default { fetch: handle };
