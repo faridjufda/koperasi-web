@@ -11,8 +11,8 @@ const API_BASE = (() => {
   if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
     return '/api';
   }
-  // Production: backend di Railway
-  return 'https://koperasi-web.railway.app/api';
+  // Production: backend di Cloudflare Workers (update after deploy)
+  return 'https://koperasi-web-prod.workers.dev/api';
 })();
 
 const loginView = document.getElementById('loginView');
