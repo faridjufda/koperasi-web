@@ -105,6 +105,72 @@ async function setHeaderRow(spreadsheetId, sheetTitle, headers, accessToken) {
   return r.json();
 }
 
+// New: apply formatting and conditional rules for products sheet
+async function formatProductsSheet(spreadsheetId, sheetTitle, accessToken) {
+  const requests = [];
+
+  // Freeze header row and set column widths
+  requests.push({
+    updateSheetProperties: {
+      properties: { title: sheetTitle, gridProperties: { frozenRowCount: 1 } },
+      fields: 'gridProperties.frozenRowCount'
+    }
+  });
+
+  // Set header formatting (bold, background)
+  requests.push({
+    repeatCell: {
+      range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
+      cell: { userEnteredFormat: { backgroundColor: { red: 0.85, green: 0.94, blue: 1 }, textFormat: { bold: true, fontSize: 12 } } },
+      fields: 'userEnteredFormat(backgroundColor,textFormat)'
+    }
+  });
+
+  // Column widths for first 7 columns (A-G)
+  const widths = [90, 240, 120, 120, 100, 100, 160];
+  for (let i = 0; i < widths.length; i++) {
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId: 0, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 },
+        properties: { pixelSize: widths[i] },
+        fields: 'pixelSize'
+      }
+    });
+  }
+
+  // Number format for price columns (C and D)
+  requests.push({
+    repeatCell: {
+      range: { sheetId: 0, startRowIndex: 1, startColumnIndex: 2, endColumnIndex: 4 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '¤#,##0' } } },
+      fields: 'userEnteredFormat.numberFormat'
+    }
+  });
+
+  // Conditional formatting: highlight rows where stock <= minStock (columns E and F)
+  requests.push({
+    addConditionalFormatRule: {
+      rule: {
+        ranges: [{ sheetId: 0, startRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 }],
+        booleanRule: {
+          condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: '=INDIRECT("E"&ROW())<=INDIRECT("F"&ROW())' }] },
+          format: { backgroundColor: { red: 1, green: 0.9, blue: 0.8 } }
+        }
+      },
+      index: 0
+    }
+  });
+
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  const r = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests }) });
+  if (!r.ok) {
+    // don't throw — formatting is a nicety
+    console.warn('formatProductsSheet failed', await r.text());
+    return null;
+  }
+  return r.json();
+}
+
 async function getValues(spreadsheetId, range, accessToken) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
   const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });

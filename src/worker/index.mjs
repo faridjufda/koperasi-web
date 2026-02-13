@@ -31,6 +31,10 @@ async function ensureSheets(accessToken) {
     if (!existing.has(title)) {
       await addSheet(SPREADSHEET_ID, title, accessToken);
       await setHeaderRow(SPREADSHEET_ID, title, headers, accessToken);
+      // apply sheet-specific formatting (products gets extra formatting)
+      if (title === 'products') {
+        await formatProductsSheet(SPREADSHEET_ID, title, accessToken).catch(()=>{});
+      }
     } else {
       // ensure header exists (best-effort)
       const vals = await getValues(SPREADSHEET_ID, `${title}!1:1`, accessToken);
@@ -239,7 +243,31 @@ async function handle(req) {
         for (const n of normalized) {
           await appendValues(SPREADSHEET_ID, `transaction_items!A1`, [[txId, n.prod.id, n.prod.name, String(n.qty), String(n.price), String(n.subtotal) ]], gtoken);
         }
+
+        // Also add notification entries for any product that went below minStock
+        const lowAfter = products.filter(p => Number(p.stock||0) <= Number(p.minStock||0));
+        for (const p of lowAfter) {
+          await appendValues(SPREADSHEET_ID, `notifications!A1`, [[new Date().toISOString(), p.id, p.name, p.stock]] , gtoken).catch(()=>{});
+        }
+
         return jsonResponse({ id: txId, memberName: payload.memberName||'-', paymentMethod: payload.paymentMethod||'cash', total, items: normalized.map((x)=>({ productId: x.prod.id, productName: x.prod.name, qty: x.qty, price: x.price, subtotal: x.subtotal })) });
+      }
+
+      // NEW: notify-low-stock endpoint (creates notification rows) 
+      if (path === 'api/notify-low-stock' && req.method === 'POST') {
+        const products = await getSheetObjects('products', gtoken);
+        const low = products.filter(p => Number(p.stock||0) <= Number(p.minStock||0));
+        if (!low.length) return jsonResponse({ ok: true, message: 'No low stock' });
+        for (const p of low) {
+          await appendValues(SPREADSHEET_ID, `notifications!A1`, [[new Date().toISOString(), p.id, p.name, p.stock]] , gtoken).catch(()=>{});
+        }
+        return jsonResponse({ ok: true, count: low.length, items: low });
+      }
+
+      // NEW: list notifications
+      if (path === 'api/notifications' && req.method === 'GET') {
+        const nots = await getSheetObjects('notifications', gtoken).catch(()=>[]);
+        return jsonResponse(nots.slice(0,200));
       }
     }
 

@@ -1,0 +1,25 @@
+<form id="f">
+  <h3>Tambah Barang Cepat</h3>
+  <label>Nama<br><input id="name"></label><br>
+  <label>Harga Jual<br><input id="sell" type="number"></label><br>
+  <label>Harga Beli<br><input id="buy" type="number"></label><br>
+  <label>Stok<br><input id="stock" type="number" value="0"></label><br>
+  <button type="button" onclick="add()">Simpan</button>
+  <div id="msg"></div>
+</form>
+<script>
+function add(){
+  const payload = {
+    name: document.getElementById('name').value,
+    sellPrice: Number(document.getElementById('sell').value),
+    buyPrice: Number(document.getElementById('buy').value),
+    stock: Number(document.getElementById('stock').value),
+  };
+  google.script.run.withSuccessHandler(()=> {
+    document.getElementById('msg').innerText = 'Barang ditambahkan';
+    document.getElementById('f').reset();
+  }).withFailureHandler(e=>{
+    document.getElementById('msg').innerText = 'Error: '+e.message;
+  }).addProductQuick(payload);
+}
+</script>
