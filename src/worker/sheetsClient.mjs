@@ -105,66 +105,187 @@ async function setHeaderRow(spreadsheetId, sheetTitle, headers, accessToken) {
   return r.json();
 }
 
-// New: apply formatting and conditional rules for products sheet
+// New: apply premium formatting and conditional rules for all sheets
 async function formatProductsSheet(spreadsheetId, sheetTitle, accessToken) {
+  // First, get all sheet IDs
+  const meta = await getSpreadsheetMeta(spreadsheetId, accessToken);
+  const sheets = meta.sheets || [];
+  const sheetMap = {};
+  for (const s of sheets) {
+    sheetMap[s.properties.title] = s.properties.sheetId;
+  }
+
   const requests = [];
 
-  // Freeze header row and set column widths
+  // === PRODUCTS SHEET ===
+  const prodId = sheetMap[sheetTitle] ?? sheetMap['products'] ?? 0;
+  
+  // Freeze header row
   requests.push({
     updateSheetProperties: {
-      properties: { title: sheetTitle, gridProperties: { frozenRowCount: 1 } },
+      properties: { sheetId: prodId, gridProperties: { frozenRowCount: 1 } },
       fields: 'gridProperties.frozenRowCount'
     }
   });
 
-  // Set header formatting (bold, background)
+  // Header formatting — gradient blue
   requests.push({
     repeatCell: {
-      range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
-      cell: { userEnteredFormat: { backgroundColor: { red: 0.85, green: 0.94, blue: 1 }, textFormat: { bold: true, fontSize: 12 } } },
-      fields: 'userEnteredFormat(backgroundColor,textFormat)'
+      range: { sheetId: prodId, startRowIndex: 0, endRowIndex: 1 },
+      cell: { userEnteredFormat: { 
+        backgroundColor: { red: 0.24, green: 0.25, blue: 0.95 },
+        textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+        horizontalAlignment: 'CENTER',
+        verticalAlignment: 'MIDDLE',
+        padding: { top: 6, bottom: 6 }
+      }},
+      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,padding)'
     }
   });
 
-  // Column widths for first 7 columns (A-G)
-  const widths = [90, 240, 120, 120, 100, 100, 160];
+  // Column widths
+  const widths = [100, 220, 120, 120, 80, 80, 160];
   for (let i = 0; i < widths.length; i++) {
     requests.push({
       updateDimensionProperties: {
-        range: { sheetId: 0, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 },
+        range: { sheetId: prodId, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 },
         properties: { pixelSize: widths[i] },
         fields: 'pixelSize'
       }
     });
   }
 
-  // Number format for price columns (C and D)
+  // Number format for price columns (C=2 and D=3)  
   requests.push({
     repeatCell: {
-      range: { sheetId: 0, startRowIndex: 1, startColumnIndex: 2, endColumnIndex: 4 },
-      cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '¤#,##0' } } },
+      range: { sheetId: prodId, startRowIndex: 1, startColumnIndex: 2, endColumnIndex: 4 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '"Rp"#,##0' } } },
       fields: 'userEnteredFormat.numberFormat'
     }
   });
 
-  // Conditional formatting: highlight rows where stock <= minStock (columns E and F)
+  // Alternating row colors
+  requests.push({
+    addBanding: {
+      bandedRange: {
+        range: { sheetId: prodId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: 7 },
+        rowProperties: {
+          headerColor: { red: 0.24, green: 0.25, blue: 0.95 },
+          firstBandColor: { red: 1, green: 1, blue: 1 },
+          secondBandColor: { red: 0.95, green: 0.96, blue: 1 }
+        }
+      }
+    }
+  });
+
+  // Conditional: stock <= minStock → red background
   requests.push({
     addConditionalFormatRule: {
       rule: {
-        ranges: [{ sheetId: 0, startRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 }],
+        ranges: [{ sheetId: prodId, startRowIndex: 1, startColumnIndex: 0, endColumnIndex: 7 }],
         booleanRule: {
-          condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: '=INDIRECT("E"&ROW())<=INDIRECT("F"&ROW())' }] },
-          format: { backgroundColor: { red: 1, green: 0.9, blue: 0.8 } }
+          condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: '=AND(E2<=F2,E2>0)' }] },
+          format: { backgroundColor: { red: 1, green: 0.93, blue: 0.87 } }
         }
       },
       index: 0
     }
   });
 
+  // Conditional: stock = 0 → red text bold  
+  requests.push({
+    addConditionalFormatRule: {
+      rule: {
+        ranges: [{ sheetId: prodId, startRowIndex: 1, startColumnIndex: 4, endColumnIndex: 5 }],
+        booleanRule: {
+          condition: { type: 'NUMBER_EQ', values: [{ userEnteredValue: '0' }] },
+          format: { 
+            backgroundColor: { red: 1, green: 0.85, blue: 0.85 },
+            textFormat: { bold: true, foregroundColor: { red: 0.8, green: 0.1, blue: 0.1 } }
+          }
+        }
+      },
+      index: 0
+    }
+  });
+
+  // === FORMAT OTHER SHEETS ===
+  const otherSheets = ['transactions', 'movements', 'transaction_items', 'notifications', 'admins'];
+  for (const name of otherSheets) {
+    const sid = sheetMap[name];
+    if (sid === undefined) continue;
+
+    // Freeze header
+    requests.push({
+      updateSheetProperties: {
+        properties: { sheetId: sid, gridProperties: { frozenRowCount: 1 } },
+        fields: 'gridProperties.frozenRowCount'
+      }
+    });
+
+    // Header styling
+    const colors = {
+      transactions: { red: 0.06, green: 0.73, blue: 0.51 },    // green
+      movements: { red: 0.96, green: 0.62, blue: 0.04 },       // orange
+      transaction_items: { red: 0.4, green: 0.33, blue: 0.8 },  // purple
+      notifications: { red: 0.93, green: 0.27, blue: 0.27 },   // red
+      admins: { red: 0.3, green: 0.3, blue: 0.35 },            // dark gray
+    };
+    const bg = colors[name] || { red: 0.3, green: 0.3, blue: 0.8 };
+
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sid, startRowIndex: 0, endRowIndex: 1 },
+        cell: { userEnteredFormat: { 
+          backgroundColor: bg,
+          textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+          horizontalAlignment: 'CENTER',
+          verticalAlignment: 'MIDDLE'
+        }},
+        fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+      }
+    });
+
+    // Banding
+    requests.push({
+      addBanding: {
+        bandedRange: {
+          range: { sheetId: sid, startRowIndex: 0 },
+          rowProperties: {
+            headerColor: bg,
+            firstBandColor: { red: 1, green: 1, blue: 1 },
+            secondBandColor: { red: 0.97, green: 0.97, blue: 0.98 }
+          }
+        }
+      }
+    });
+  }
+
+  // Currency format for transactions.total (col F=5)
+  if (sheetMap['transactions'] !== undefined) {
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sheetMap['transactions'], startRowIndex: 1, startColumnIndex: 5, endColumnIndex: 6 },
+        cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '"Rp"#,##0' } } },
+        fields: 'userEnteredFormat.numberFormat'
+      }
+    });
+  }
+
+  // Currency format for transaction_items (price=4, subtotal=5)
+  if (sheetMap['transaction_items'] !== undefined) {
+    requests.push({
+      repeatCell: {
+        range: { sheetId: sheetMap['transaction_items'], startRowIndex: 1, startColumnIndex: 4, endColumnIndex: 6 },
+        cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '"Rp"#,##0' } } },
+        fields: 'userEnteredFormat.numberFormat'
+      }
+    });
+  }
+
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
   const r = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests }) });
   if (!r.ok) {
-    // don't throw — formatting is a nicety
     console.warn('formatProductsSheet failed', await r.text());
     return null;
   }

@@ -50,7 +50,7 @@ function initEnv(workerEnv) {
 
 /* ===== Sheet Definitions ===== */
 const SHEETS = {
-  admins: ['username', 'passwordHash', 'isActive'],
+  admins: ['username', 'password', 'passwordHash', 'isActive'],
   products: ['id', 'name', 'sellPrice', 'buyPrice', 'stock', 'minStock', 'updatedAt'],
   transactions: ['id', 'createdAt', 'cashier', 'memberName', 'paymentMethod', 'total'],
   transaction_items: ['transactionId', 'productId', 'productName', 'qty', 'price', 'subtotal'],
@@ -255,6 +255,16 @@ async function handle(request, workerEnv) {
       return jsonResponse({ ok: true, message: 'Worker dan koneksi spreadsheet siap.' });
     }
 
+    // ── Format Sheets (one-time beautify) ──
+    if (path === 'api/format-sheets' && request.method === 'POST') {
+      try {
+        await formatProductsSheet(ENV.SPREADSHEET_ID, 'products', gtoken);
+        return jsonResponse({ ok: true, message: 'Semua sheet berhasil diformat!' });
+      } catch (err) {
+        return jsonResponse({ ok: false, message: err.message }, 500);
+      }
+    }
+
     // ── Login ──
     if (path === 'api/login' && request.method === 'POST') {
       const body = await request.json();
@@ -311,8 +321,20 @@ async function handle(request, workerEnv) {
       // -- Products POST (upsert) --
       if (path === 'api/products' && request.method === 'POST') {
         const payload = await request.json();
+        if (!payload.name) return jsonResponse({ message: 'Nama barang wajib diisi.' }, 400);
         const products = await getSheetObjects('products', gtoken);
-        const id = payload.id || `PRD-${Date.now()}`;
+
+        // Auto-generate short readable ID: BRG-XXXX (4 random alphanumeric)
+        let id = payload.id;
+        if (!id) {
+          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+          let code;
+          do {
+            code = '';
+            for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+            id = `BRG-${code}`;
+          } while (products.some((p) => p.id === id));
+        }
         const idx = products.findIndex((r) => r.id === id);
         const now = new Date().toISOString();
         const item = {
