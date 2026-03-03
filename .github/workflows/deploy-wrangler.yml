@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 jobs:
-  publish:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -14,38 +14,23 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
-      - name: Install wrangler
-        run: |
-          npm install -g wrangler@2
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Authenticate Wrangler
+      - name: Upload Worker secrets
         env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-        run: |
-          echo "Using Cloudflare API token"
-
-      - name: Put Cloudflare Worker secrets
-        env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
-          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
-          GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: |
           set -e
-          # Write secrets non-interactively to Cloudflare using wrangler (reads from stdin)
-          printf '%s' "$GEMINI_API_KEY" | wrangler secret put GEMINI_API_KEY --env production --apiToken "$CF_API_TOKEN"
-          printf '%s' "$JWT_SECRET" | wrangler secret put JWT_SECRET --env production --apiToken "$CF_API_TOKEN"
-          printf '%s' "$GOOGLE_CLIENT_EMAIL" | wrangler secret put GOOGLE_CLIENT_EMAIL --env production --apiToken "$CF_API_TOKEN"
-          # For private key, ensure exact newlines are preserved in the GitHub secret
-          printf '%s' "$GOOGLE_PRIVATE_KEY" | wrangler secret put GOOGLE_PRIVATE_KEY --env production --apiToken "$CF_API_TOKEN"
-          printf '%s' "$GOOGLE_SPREADSHEET_ID" | wrangler secret put GOOGLE_SPREADSHEET_ID --env production --apiToken "$CF_API_TOKEN"
+          echo "${{ secrets.GEMINI_API_KEY }}" | npx wrangler secret put GEMINI_API_KEY --env production
+          echo "${{ secrets.JWT_SECRET }}" | npx wrangler secret put JWT_SECRET --env production
+          echo "${{ secrets.GOOGLE_CLIENT_EMAIL }}" | npx wrangler secret put GOOGLE_CLIENT_EMAIL --env production
+          printf '%s' "${{ secrets.GOOGLE_PRIVATE_KEY }}" | npx wrangler secret put GOOGLE_PRIVATE_KEY --env production
+          echo "${{ secrets.GOOGLE_SPREADSHEET_ID }}" | npx wrangler secret put GOOGLE_SPREADSHEET_ID --env production
 
-      - name: Publish Worker
+      - name: Deploy Worker
         env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-        run: |
-          wrangler publish --env production --apiToken "$CF_API_TOKEN"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: npx wrangler deploy --env production

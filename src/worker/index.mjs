@@ -99,7 +99,7 @@ function initEnv(workerEnv) {
     GEMINI_MODEL:
       (workerEnv && workerEnv.GEMINI_MODEL) ||
       (typeof process !== 'undefined' && process.env && process.env.GEMINI_MODEL) ||
-      'gemini-1.0',
+      'gemini-2.0-flash',
   };
 }
 
