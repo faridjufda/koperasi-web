@@ -316,6 +316,13 @@ async function appendValues(spreadsheetId, range, values, accessToken) {
   return r.json();
 }
 
+async function clearValues(spreadsheetId, range, accessToken) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:clear`;
+  const r = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: '{}' });
+  if (!r.ok) throw new Error('Gagal clear values');
+  return r.json();
+}
+
 function rowsToObjects(headerRow = [], rows = []) {
   const headers = headerRow.map((h) => String(h || '').trim());
   return (rows || []).map((r) => {
@@ -338,6 +345,7 @@ export {
   getValues,
   updateValues,
   appendValues,
+  clearValues,
   rowsToObjects,
   objectsToRows,
 };

@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Koperasi AI Chat</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 680px; margin: 40px auto; }
+    #chat { border: 1px solid #ddd; padding: 12px; height: 300px; overflow:auto; }
+    .msg { margin: 6px 0; }
+    .user { color: #0b63b7; }
+    .bot { color: #333; }
+  </style>
+</head>
+<body>
+  <h2>Koperasi AI Chat (PoC)</h2>
+  <div>
+    <label>Username: <input id="username" value="admin"></label>
+    <label>Password: <input id="password" type="password" value="admin123"></label>
+    <button id="btnLogin">Login</button>
+    <span id="loginStatus"></span>
+  </div>
+
+  <div id="chat"></div>
+
+  <div style="margin-top:12px;">
+    <input id="prompt" style="width:70%" placeholder="Tanya tentang stok atau analisis...">
+    <button id="send">Kirim</button>
+  </div>
+
+<script>
+let token = null;
+const apiBase = '' // assume same origin or set to backend base URL like http://localhost:8000
+
+function appendMsg(cls, text) {
+  const el = document.createElement('div'); el.className = 'msg ' + cls; el.innerText = text; document.getElementById('chat').appendChild(el); document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+}
+
+document.getElementById('btnLogin').addEventListener('click', async () => {
+  const u = document.getElementById('username').value;
+  const p = document.getElementById('password').value;
+  const res = await fetch(apiBase + '/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username: u, password: p }) });
+  const j = await res.json();
+  if (res.ok && j.token) { token = j.token; document.getElementById('loginStatus').innerText = 'Logged in'; } else { document.getElementById('loginStatus').innerText = (j.detail || j.message || 'Login failed'); }
+});
+
+document.getElementById('send').addEventListener('click', async () => {
+  const prompt = document.getElementById('prompt').value;
+  if (!prompt) return;
+  appendMsg('user', 'You: ' + prompt);
+  if (!token) {
+    appendMsg('bot', 'Please login first.');
+    return;
+  }
+  const res = await fetch(apiBase + '/api/gemini', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ prompt }) });
+  const j = await res.json();
+  if (res.ok && j.text) {
+    appendMsg('bot', 'AI: ' + j.text);
+  } else {
+    appendMsg('bot', 'Error: ' + (j.detail || j.message || JSON.stringify(j)));
+  }
+});
+
+</script>
+</body>
+</html>

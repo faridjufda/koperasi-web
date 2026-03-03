@@ -44,9 +44,30 @@ const receiptModalBtn = $('receiptModalBtn');
 function showLoading() { loadingOverlay && loadingOverlay.classList.remove('hidden'); }
 function hideLoading() { loadingOverlay && loadingOverlay.classList.add('hidden'); }
 
-function showSuccess(message) { successMsg.textContent = message; successModal.classList.remove('hidden'); }
+function showSuccess(message) { showToast(message, 'success'); }
 function showError(message) { errorMsg.textContent = message; errorModal.classList.remove('hidden'); }
 function hideModals() { successModal.classList.add('hidden'); errorModal.classList.add('hidden'); receiptModal.classList.add('hidden'); }
+
+/* ===== Toast Notification ===== */
+function showToast(message, type = 'info', duration = 2500) {
+  const container = $('toastContainer');
+  if (!container) return;
+  const icons = { success: '\u2705', error: '\u274c', info: '\ud83d\udca1' };
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  const iconSpan = document.createElement('span');
+  iconSpan.className = 'toast-icon';
+  iconSpan.textContent = icons[type] || icons.info;
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = message;
+  toast.appendChild(iconSpan);
+  toast.appendChild(msgSpan);
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'toastOut .3s ease forwards';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
 
 successModalBtn.addEventListener('click', hideModals);
 errorModalBtn.addEventListener('click', hideModals);
@@ -60,18 +81,43 @@ function formatRupiah(value) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
-function formatDate(iso) {
-  if (!iso) return '-';
-  try { return new Date(iso).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }); }
-  catch { return iso; }
+const TIMEZONE = 'Asia/Makassar'; // WITA — Indonesia Tengah
+
+/* ===== HTML Sanitization (XSS Protection) ===== */
+function escHtml(str) {
+  if (typeof str !== 'string') return str;
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatDate(val) {
+  if (!val) return '-';
+  // Already WITA formatted (from backend): return as-is
+  if (String(val).includes('WITA')) return String(val);
+  try {
+    return new Date(val).toLocaleString('id-ID', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      timeZone: TIMEZONE,
+    });
+  } catch {
+    return val;
+  }
 }
 
 /* ===== Clock ===== */
 function updateClock() {
   const el = $('clockDisplay');
-  if (el) el.textContent = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+  if (el) {
+    el.textContent = new Date().toLocaleString('id-ID', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: TIMEZONE,
+    }) + ' WITA';
+  }
 }
-setInterval(updateClock, 30000);
+setInterval(updateClock, 10000);
 updateClock();
 
 /* ===== API Fetch ===== */
@@ -146,8 +192,11 @@ function renderProductGrid(filter = '') {
     const low = p.stock > 0 && p.stock <= p.minStock;
     const stockClass = oos ? 'empty' : low ? 'low' : '';
     const stockText = oos ? 'Habis' : `Stok: ${p.stock}`;
-    return `<div class="product-card ${oos ? 'out-of-stock' : ''}" data-id="${p.id}" onclick="addToCart('${p.id}')">
-      <div class="p-name" title="${p.name}">${p.name}</div>
+    const cartItem = state.cart.find(c => c.productId === p.id);
+    const inCart = cartItem ? `<div class="p-cart-badge">${cartItem.qty}</div>` : '';
+    return `<div class="product-card ${oos ? 'out-of-stock' : ''}" data-id="${p.id}" data-action="add-to-cart">
+      ${inCart}
+      <div class="p-name" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
       <div class="p-price">${formatRupiah(p.sellPrice)}</div>
       <div class="p-stock ${stockClass}">${stockText}</div>
     </div>`;
@@ -170,9 +219,17 @@ function addToCart(productId) {
     state.cart.push({ productId, name: product.name, price: product.sellPrice, qty: 1, stock: product.stock });
   }
   renderCart();
+  renderProductGrid($('kasirProductSearch')?.value || ''); // update cart badges
 }
-// Make addToCart global for onclick
-window.addToCart = addToCart;
+
+// Event delegation for product grid clicks
+const productGridEl = $('productGrid');
+if (productGridEl) {
+  productGridEl.addEventListener('click', (e) => {
+    const card = e.target.closest('[data-action="add-to-cart"]');
+    if (card && card.dataset.id) addToCart(card.dataset.id);
+  });
+}
 
 function updateCartQty(productId, delta) {
   const item = state.cart.find((c) => c.productId === productId);
@@ -188,14 +245,27 @@ function updateCartQty(productId, delta) {
     item.qty = newQty;
   }
   renderCart();
+  renderProductGrid($('kasirProductSearch')?.value || '');
 }
-window.updateCartQty = updateCartQty;
 
 function removeFromCart(productId) {
   state.cart = state.cart.filter((c) => c.productId !== productId);
   renderCart();
+  renderProductGrid($('kasirProductSearch')?.value || '');
 }
-window.removeFromCart = removeFromCart;
+
+// Event delegation for cart clicks
+const cartItemsEl = $('cartItems');
+if (cartItemsEl) {
+  cartItemsEl.addEventListener('click', (e) => {
+    const minusBtn = e.target.closest('[data-action="cart-minus"]');
+    const plusBtn = e.target.closest('[data-action="cart-plus"]');
+    const removeBtn = e.target.closest('[data-action="cart-remove"]');
+    if (minusBtn && minusBtn.dataset.id) updateCartQty(minusBtn.dataset.id, -1);
+    else if (plusBtn && plusBtn.dataset.id) updateCartQty(plusBtn.dataset.id, 1);
+    else if (removeBtn && removeBtn.dataset.id) removeFromCart(removeBtn.dataset.id);
+  });
+}
 
 function renderCart() {
   const container = $('cartItems');
@@ -218,16 +288,16 @@ function renderCart() {
     total += subtotal;
     return `<div class="cart-item">
       <div class="cart-item-info">
-        <div class="cart-item-name" title="${item.name}">${item.name}</div>
+        <div class="cart-item-name" title="${escHtml(item.name)}">${escHtml(item.name)}</div>
         <div class="cart-item-price">${formatRupiah(item.price)}</div>
       </div>
       <div class="cart-item-qty">
-        <button type="button" onclick="updateCartQty('${item.productId}', -1)">−</button>
+        <button type="button" data-action="cart-minus" data-id="${item.productId}">−</button>
         <span class="qty-val">${item.qty}</span>
-        <button type="button" onclick="updateCartQty('${item.productId}', 1)">+</button>
+        <button type="button" data-action="cart-plus" data-id="${item.productId}">+</button>
       </div>
       <div class="cart-item-subtotal">${formatRupiah(subtotal)}</div>
-      <button type="button" class="cart-item-remove" onclick="removeFromCart('${item.productId}')">✕</button>
+      <button type="button" class="cart-item-remove" data-action="cart-remove" data-id="${item.productId}">✕</button>
     </div>`;
   }).join('');
   totalEl.textContent = formatRupiah(total);
@@ -237,7 +307,7 @@ function renderCart() {
 function makeProductOptions() {
   if (adjustProductId) {
     adjustProductId.innerHTML = state.products
-      .map((p) => `<option value="${p.id}">${p.name} (stok: ${p.stock})</option>`)
+      .map((p) => `<option value="${escHtml(p.id)}">${escHtml(p.name)} (stok: ${p.stock})</option>`)
       .join('');
   }
 }
@@ -255,7 +325,7 @@ function renderProducts(filter = '') {
     else { statusBadge = 'badge-success'; statusText = '✅ Aman'; }
 
     return `<tr>
-      <td><strong>${p.name}</strong></td>
+      <td><strong>${escHtml(p.name)}</strong></td>
       <td>${formatRupiah(p.sellPrice)}</td>
       <td>${formatRupiah(p.buyPrice)}</td>
       <td><strong>${p.stock}</strong> <small style="color:var(--gray-400)">/ min ${p.minStock}</small></td>
@@ -273,11 +343,11 @@ function renderMovements() {
     const icon = mv.type === 'IN' ? '📥' : '📤';
     return `<tr>
       <td>${formatDate(mv.createdAt)}</td>
-      <td><strong>${mv.productName || '-'}</strong></td>
+      <td><strong>${escHtml(mv.productName || '-')}</strong></td>
       <td><span class="badge ${typeBadge}">${icon} ${mv.type}</span></td>
       <td>${mv.qty}</td>
       <td><strong>${mv.balanceAfter}</strong></td>
-      <td>${mv.note || '-'}</td>
+      <td>${escHtml(mv.note || '-')}</td>
     </tr>`;
   }).join('');
 }
@@ -288,8 +358,8 @@ function renderTxHistory() {
     return `<tr>
       <td><code style="font-size:11px;color:var(--gray-400)">${tx.id}</code></td>
       <td>${formatDate(tx.createdAt)}</td>
-      <td>${tx.cashier || '-'}</td>
-      <td>${tx.memberName || '-'}</td>
+      <td>${escHtml(tx.cashier || '-')}</td>
+      <td>${escHtml(tx.memberName || '-')}</td>
       <td><span class="badge badge-primary">${methodBadge} ${tx.paymentMethod || '-'}</span></td>
       <td><strong>${formatRupiah(tx.total)}</strong></td>
     </tr>`;
@@ -297,19 +367,23 @@ function renderTxHistory() {
 }
 
 /* ===== Show Receipt ===== */
+let lastReceipt = null;
+
 function showReceipt(txResult) {
-  const now = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
+  lastReceipt = txResult;
+  const now = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short', timeZone: TIMEZONE });
   const items = txResult.items || [];
   receiptContent.innerHTML = `
     <div class="receipt-header">
       <h3>🏪 Koperasi Web</h3>
-      <p>${now}</p>
-      <p>Kasir: ${state.username} &bull; ${txResult.paymentMethod?.toUpperCase()}</p>
-      ${txResult.memberName && txResult.memberName !== '-' ? `<p>Anggota: ${txResult.memberName}</p>` : ''}
+      <p>${now} WITA</p>
+      <p>No: ${txResult.id || '-'}</p>
+      <p>Kasir: ${escHtml(state.username)} &bull; ${escHtml(txResult.paymentMethod?.toUpperCase())}</p>
+      ${txResult.memberName && txResult.memberName !== '-' ? `<p>Anggota: ${escHtml(txResult.memberName)}</p>` : ''}
     </div>
     <hr class="receipt-divider" />
     ${items.map(it => `<div class="receipt-item">
-      <div class="receipt-item-name">${it.productName}</div>
+      <div class="receipt-item-name">${escHtml(it.productName)}</div>
       <div class="receipt-item-detail">
         <span>${it.qty} x ${formatRupiah(it.price)}</span>
         <span>${formatRupiah(it.subtotal)}</span>
@@ -320,10 +394,62 @@ function showReceipt(txResult) {
       <span>${formatRupiah(txResult.total)}</span>
     </div>
     <hr class="receipt-divider" />
-    <p style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:8px">Terima kasih atas kunjungan Anda!</p>
+    <p style="text-align:center;font-size:11px;color:var(--gray-400);margin-top:8px">Terima kasih atas kunjungan Anda! 🙏</p>
   `;
   receiptModal.classList.remove('hidden');
 }
+
+/* ===== Print Receipt ===== */
+function printReceipt() {
+  const content = $('receiptContent');
+  if (!content) return;
+  const printWin = window.open('', '_blank', 'width=360,height=600');
+  if (!printWin) { showError('Popup blocker aktif. Izinkan popup untuk print.'); return; }
+  printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Struk</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: 'Courier New', monospace; padding: 12px; font-size: 12px; max-width: 300px; margin: 0 auto; }
+      .receipt-header { text-align: center; margin-bottom: 12px; }
+      .receipt-header h3 { font-size: 16px; margin-bottom: 2px; }
+      .receipt-header p { font-size: 11px; color: #666; }
+      .receipt-divider { border: none; border-top: 1px dashed #ccc; margin: 8px 0; }
+      .receipt-item { padding: 3px 0; }
+      .receipt-item-name { font-weight: bold; font-size: 12px; }
+      .receipt-item-detail { display: flex; justify-content: space-between; font-size: 11px; color: #555; }
+      .receipt-line { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; }
+      .receipt-line.total { font-size: 15px; font-weight: bold; border-top: 2px solid #333; padding-top: 8px; margin-top: 6px; }
+      @media print { body { padding: 0; } }
+    </style></head><body>${content.innerHTML}</body></html>`);
+  printWin.document.close();
+  printWin.focus();
+  setTimeout(() => { printWin.print(); printWin.close(); }, 300);
+}
+window.printReceipt = printReceipt;
+
+// Attach print button event listener
+const printReceiptBtn = $('printReceiptBtn');
+if (printReceiptBtn) printReceiptBtn.addEventListener('click', printReceipt);
+
+/* ===== Share Receipt (WhatsApp) ===== */
+function shareReceipt() {
+  if (!lastReceipt) return;
+  const items = lastReceipt.items || [];
+  const now = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short', timeZone: TIMEZONE });
+  let text = `🏪 *KOPERASI WEB*\n${now} WITA\nNo: ${lastReceipt.id || '-'}\nKasir: ${state.username}\n`;
+  if (lastReceipt.memberName && lastReceipt.memberName !== '-') text += `Anggota: ${lastReceipt.memberName}\n`;
+  text += `Metode: ${lastReceipt.paymentMethod?.toUpperCase()}\n━━━━━━━━━━━━━━━━━\n`;
+  items.forEach(it => {
+    text += `${it.productName}\n  ${it.qty} x ${formatRupiah(it.price)} = ${formatRupiah(it.subtotal)}\n`;
+  });
+  text += `━━━━━━━━━━━━━━━━━\n*TOTAL: ${formatRupiah(lastReceipt.total)}*\n\nTerima kasih! 🙏`;
+  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(url, '_blank');
+}
+window.shareReceipt = shareReceipt;
+
+// Attach share button event listener
+const shareReceiptBtn = $('shareReceiptBtn');
+if (shareReceiptBtn) shareReceiptBtn.addEventListener('click', shareReceipt);
 
 /* ===== Load All Data ===== */
 async function loadData() {
@@ -417,8 +543,11 @@ $('refreshBtn').addEventListener('click', async () => {
 
 // CLEAR CART
 $('clearCartBtn').addEventListener('click', () => {
+  if (!state.cart.length) return;
+  if (!confirm('Kosongkan semua item di keranjang?')) return;
   state.cart = [];
   renderCart();
+  renderProductGrid($('kasirProductSearch')?.value || '');
 });
 
 // SAVE TRANSACTION (Checkout)
@@ -496,6 +625,18 @@ $('adjustmentForm').addEventListener('submit', async (event) => {
     showSuccess('Penyesuaian stok berhasil!');
   } catch (error) { showError(error.message); }
   finally { btn.textContent = orig; btn.disabled = false; }
+});
+
+/* ===== Keyboard Shortcuts ===== */
+document.addEventListener('keydown', (e) => {
+  // Only when logged in
+  if (!state.token) return;
+  // F2 = focus search di kasir
+  if (e.key === 'F2') { e.preventDefault(); const s = $('kasirProductSearch'); if (s) s.focus(); }
+  // F9 = checkout shortcut
+  if (e.key === 'F9') { e.preventDefault(); $('saveTxBtn')?.click(); }
+  // F5 = refresh (custom, prevent default page reload)
+  if (e.key === 'F5' && !e.ctrlKey) { e.preventDefault(); $('refreshBtn')?.click(); }
 });
 
 /* ===== Bootstrap ===== */
