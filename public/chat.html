@@ -2,64 +2,259 @@
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Koperasi AI Chat</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 680px; margin: 40px auto; }
-    #chat { border: 1px solid #ddd; padding: 12px; height: 300px; overflow:auto; }
-    .msg { margin: 6px 0; }
-    .user { color: #0b63b7; }
-    .bot { color: #333; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    h1, h2 {
+      text-align: center;
+      color: #333;
+    }
+    .login-section {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 20px;
+      padding: 12px;
+      background: #f9f9f9;
+      border-radius: 6px;
+    }
+    .login-section label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .login-section input {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      min-width: 150px;
+    }
+    .login-section button {
+      padding: 8px 16px;
+      background: #0b63b7;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .login-section button:hover {
+      background: #084a8f;
+    }
+    #loginStatus {
+      display: inline-block;
+      padding: 4px 8px;
+      margin-left: 8px;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+    #loginStatus.success {
+      background: #d4edda;
+      color: #155724;
+    }
+    #loginStatus.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    #chat {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 12px;
+      height: 350px;
+      overflow-y: auto;
+      background: #fafafa;
+      margin: 20px 0;
+    }
+    .msg {
+      margin: 8px 0;
+      padding: 8px;
+      border-radius: 4px;
+      line-height: 1.4;
+    }
+    .user {
+      background: #e3f2fd;
+      color: #0b63b7;
+      text-align: right;
+      margin-left: 40px;
+    }
+    .bot {
+      background: #f0f0f0;
+      color: #333;
+      margin-right: 40px;
+    }
+    .input-section {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    #prompt {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    #send {
+      padding: 10px 20px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #send:hover:not(:disabled) {
+      background: #45a049;
+    }
+    #send:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .help-text {
+      font-size: 0.9em;
+      color: #666;
+      margin-top: 12px;
+      padding: 8px;
+      background: #f9f9f9;
+      border-left: 3px solid #0b63b7;
+      padding-left: 12px;
+    }
   </style>
 </head>
 <body>
-  <h2>Koperasi AI Chat (PoC)</h2>
-  <div>
-    <label>Username: <input id="username" value="admin"></label>
-    <label>Password: <input id="password" type="password" value="admin123"></label>
-    <button id="btnLogin">Login</button>
-    <span id="loginStatus"></span>
-  </div>
+  <div class="container">
+    <h1>🤖 Koperasi AI Chat</h1>
+    
+    <div class="login-section">
+      <label>
+        Username
+        <input id="username" type="text" value="admin" />
+      </label>
+      <label>
+        Password
+        <input id="password" type="password" value="admin123" />
+      </label>
+      <button id="btnLogin">Login</button>
+      <span id="loginStatus"></span>
+    </div>
 
-  <div id="chat"></div>
+    <div id="chat"></div>
 
-  <div style="margin-top:12px;">
-    <input id="prompt" style="width:70%" placeholder="Tanya tentang stok atau analisis...">
-    <button id="send">Kirim</button>
+    <div class="input-section">
+      <input id="prompt" type="text" placeholder="Tanya tentang stok, analisis, atau apapun..." />
+      <button id="send" disabled>Kirim</button>
+    </div>
+
+    <div class="help-text">
+      💡 Tips: Coba tanyakan "Ringkas stok Buku Tulis", "Analisis penjualan bulan ini", atau pertanyaan lainnya tentang koperasi.
+    </div>
   </div>
 
 <script>
 let token = null;
-const apiBase = '' // assume same origin or set to backend base URL like http://localhost:8000
+// Change this to your Worker domain, e.g., https://koperasi-web-prod.{account}.workers.dev
+// For local dev with same origin, leave empty
+const API_BASE = ''; 
 
 function appendMsg(cls, text) {
-  const el = document.createElement('div'); el.className = 'msg ' + cls; el.innerText = text; document.getElementById('chat').appendChild(el); document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+  const el = document.createElement('div');
+  el.className = 'msg ' + cls;
+  el.textContent = text;
+  document.getElementById('chat').appendChild(el);
+  document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+}
+
+function setLoginStatus(text, isSuccess) {
+  const el = document.getElementById('loginStatus');
+  el.textContent = text;
+  el.className = isSuccess ? 'success' : 'error';
+}
+
+function setSendButton(enabled) {
+  document.getElementById('send').disabled = !enabled;
 }
 
 document.getElementById('btnLogin').addEventListener('click', async () => {
-  const u = document.getElementById('username').value;
-  const p = document.getElementById('password').value;
-  const res = await fetch(apiBase + '/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username: u, password: p }) });
-  const j = await res.json();
-  if (res.ok && j.token) { token = j.token; document.getElementById('loginStatus').innerText = 'Logged in'; } else { document.getElementById('loginStatus').innerText = (j.detail || j.message || 'Login failed'); }
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value.trim();
+  if (!username || !password) {
+    setLoginStatus('Username dan password harus diisi', false);
+    return;
+  }
+  try {
+    const res = await fetch((API_BASE || '') + '/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const j = await res.json();
+    if (res.ok && j.token) {
+      token = j.token;
+      setLoginStatus('✓ Logged in', true);
+      setSendButton(true);
+      appendMsg('bot', '✓ Berhasil login. Sekarang Anda bisa berbicara dengan AI untuk analisis stok dan penjualan.');
+    } else {
+      setLoginStatus('Login gagal: ' + (j.detail || j.message || 'Unknown error'), false);
+      token = null;
+      setSendButton(false);
+    }
+  } catch (err) {
+    setLoginStatus('Koneksi error: ' + err.message, false);
+    setSendButton(false);
+  }
 });
 
 document.getElementById('send').addEventListener('click', async () => {
-  const prompt = document.getElementById('prompt').value;
+  const prompt = document.getElementById('prompt').value.trim();
   if (!prompt) return;
-  appendMsg('user', 'You: ' + prompt);
   if (!token) {
-    appendMsg('bot', 'Please login first.');
+    appendMsg('bot', 'Silakan login terlebih dahulu.');
     return;
   }
-  const res = await fetch(apiBase + '/api/gemini', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ prompt }) });
-  const j = await res.json();
-  if (res.ok && j.text) {
-    appendMsg('bot', 'AI: ' + j.text);
-  } else {
-    appendMsg('bot', 'Error: ' + (j.detail || j.message || JSON.stringify(j)));
+  appendMsg('user', 'Anda: ' + prompt);
+  document.getElementById('prompt').value = '';
+  try {
+    const res = await fetch((API_BASE || '') + '/api/gemini', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ prompt })
+    });
+    const j = await res.json();
+    if (res.ok && j.text) {
+      appendMsg('bot', 'AI: ' + j.text);
+    } else {
+      appendMsg('bot', '❌ Error: ' + (j.detail || j.message || j.ok === false ? 'Unauthorized' : 'Unknown error'));
+    }
+  } catch (err) {
+    appendMsg('bot', '❌ Koneksi error: ' + err.message);
   }
 });
 
+// Allow Enter key to send
+document.getElementById('prompt').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') document.getElementById('send').click();
+});
+
+// Initial message
+appendMsg('bot', 'Selamat datang! Login untuk memulai chat dengan AI tentang stok dan penjualan koperasi.');
 </script>
 </body>
 </html>
